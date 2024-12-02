@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa Interactivo</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css">
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+</head>
+<body>
+    <div id="map" style="width: 100%; height: 100vh;"></div>
+    <script>
+        const map = L.map('map').setView([-33.4569, -70.6483], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+        let markers = [];
+
+        function addMarkers(coordinates) {
+            coordinates.forEach(function (coord) {
+                const markerIcon = L.divIcon({
+                    className: 'custom-marker',
+                    html: `<div style="background-color: ${coord.color}; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white;"></div>`,
+                    iconSize: [20, 20]
+                });
+                const marker = L.marker([coord.latitude, coord.longitude], { icon: markerIcon }).addTo(map)
+                    .bindPopup(`Coordenadas: ${coord.latitude}, ${coord.longitude}<br>${coord.description}<br>${coord.status}<br><a href="#" onclick="removeMarker(${coord.latitude}, ${coord.longitude})">Eliminar</a>`);
+                markers.push({ marker, data: coord });
+            });
+        }
+
+        function removeMarker(lat, lon) {
+            markers = markers.filter(m => {
+                if (m.data.latitude === lat && m.data.longitude === lon) {
+                    map.removeLayer(m.marker);
+                    return false;
+                }
+                return true;
+            });
+            updateJSON(lat, lon);
+            alert("Marcador eliminado");
+        }
+
+        function updateJSON(lat, lon) {
+            const updatedCoordinates = markers.map(m => m.data);
+            window.pyqtObj.updateCoordinates(JSON.stringify(updatedCoordinates), lat, lon);
+        }
+
+        // Initialize the QWebChannel for communication between PyQt and JavaScript
+        new QWebChannel(qt.webChannelTransport, function(channel) {
+            window.pyqtObj = channel.objects.pyqtObj;
+            window.pyqtObj.coordinatesReceived.connect(addMarkers);
+        });
+
+        // Load initial coordinates from JSON file
+        $.getJSON('coordenada.json', function (data) {
+            addMarkers(data);
+        }).fail(function () {
+            console.error("Error al cargar el archivo JSON");
+        });
+    </script>
+</body>
+</html>

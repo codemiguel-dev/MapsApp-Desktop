@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa Interactivo</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css">
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+</head>
+<body>
+    <div id="map" style="width: 100%; height: 100vh;"></div>
+    <button id="save-coordinate-btn">Agregar Coordenada</button>
+    <button id="query-location-btn">Mostrar Ubicación</button>
+    <script>
+        // Obtener los parámetros de la URL (latitud y longitud inicial)
+        const urlParams = new URLSearchParams(window.location.search);
+        const lat = parseFloat(urlParams.get('lat')) || -33.4569;
+        const lon = parseFloat(urlParams.get('lon')) || -70.6483;
+
+        // Crear el mapa centrado en las coordenadas especificadas
+        const map = L.map('map').setView([lat, lon], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+        }).addTo(map);
+
+        // Crear un marcador global
+        let marker;
+        let lastClickedLat, lastClickedLon;
+
+        // Función para añadir marcadores desde las coordenadas
+        function addMarkers(coordinates) {
+            coordinates.forEach(coord => {
+                L.marker([coord.lat, coord.lon]).addTo(map)
+                    .bindPopup(`Lat: ${coord.lat.toFixed(5)}, Lon: ${coord.lon.toFixed(5)}`);
+            });
+        }
+
+        // Configurar la comunicación con PyQt5 usando QWebChannel
+        new QWebChannel(qt.webChannelTransport, function(channel) {
+            window.pyqtObj = channel.objects.pyqtObj;
+            // Llamar a addMarkers cuando las coordenadas estén disponibles
+            window.pyqtObj.coordinatesReceived.connect(addMarkers);
+        });
+
+        // Manejar el evento de clic en el mapa
+        map.on('click', function(e) {
+            lastClickedLat = e.latlng.lat;
+            lastClickedLon = e.latlng.lng;
+            // Si ya hay un marcador, lo eliminamos
+            if (marker) {
+                map.removeLayer(marker);
+            }
+            // Colocar un nuevo marcador en las coordenadas clicadas
+            marker = L.marker([lastClickedLat, lastClickedLon]).addTo(map);
+            marker.bindPopup(`Lat: ${lastClickedLat.toFixed(5)}, Lon: ${lastClickedLon.toFixed(5)}`).openPopup();
+            // Enviar las coordenadas al objeto PyQt
+            if (window.pyqtObj) {
+                window.pyqtObj.sendCoordinates(lastClickedLat, lastClickedLon);
+            }
+        });
+
+
+
+        // Manejador de clic para el botón de mostrar ubicación
+        document.getElementById('query-location-btn').addEventListener('click', function() {
+            const queryLat = parseFloat(prompt("Ingrese la latitud:"));
+            const queryLon = parseFloat(prompt("Ingrese la longitud:"));
+            if (!isNaN(queryLat) && !isNaN(queryLon)) {
+                const queryMarker = L.marker([queryLat, queryLon], { color: 'blue' }).addTo(map);
+                queryMarker.bindPopup(`Lat: ${queryLat.toFixed(5)}, Lon: ${queryLon.toFixed(5)}`).openPopup();
+            } else {
+                alert("Coordenadas inválidas. Por favor, intente de nuevo.");
+            }
+        });
+    </script>
+</body>
+</html>
